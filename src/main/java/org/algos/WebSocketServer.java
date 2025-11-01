@@ -143,7 +143,7 @@ public class WebSocketServer {
         JsonMessage connectMessage = createSystemMessage(
                 clientId,
                 "Client connected",
-                "client_connect"  // ← Cambiado de "SYSTEM"
+                "client_connect"
         );
 
         broadcast(createSystemMessageJson(connectMessage), "SYSTEM");
@@ -152,8 +152,8 @@ public class WebSocketServer {
     private void notifyClientDisconnection(String clientId) {
         JsonMessage disconnectMessage = createSystemMessage(
                 clientId,
-                "Client disconnected",
-                "client_disconnect"  // ← Cambiado de "SYSTEM"
+                "Client disconnected\n----------------------------------------------------------\n",
+                "client_disconnect"
         );
 
         broadcast(createSystemMessageJson(disconnectMessage), "SYSTEM");
