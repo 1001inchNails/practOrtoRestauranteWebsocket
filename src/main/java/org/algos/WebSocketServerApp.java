@@ -8,7 +8,7 @@ public class WebSocketServerApp {
 
         try {
             server.start();
-            System.out.println("WebSocket server started on port 8025");
+            System.out.println("WebSocket server en puerto 8025");
             Thread.currentThread().join();
         } catch (Exception e) {
             throw new RuntimeException(e);

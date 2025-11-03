@@ -16,68 +16,64 @@ public class WebSocketServer {
         // verificar si el clientId ya existe
         if (sessions.containsKey(clientId)) {
             try {
-                session.getBasicRemote().sendText(createErrorJson("CLIENT_ID_EXISTS",
-                        "Client ID already exists: " + clientId));
+                session.getBasicRemote().sendText(crearJsonError("CLIENT_ID_EXISTS",
+                        "ID ya existe: " + clientId));
                 session.close(new CloseReason(CloseReason.CloseCodes.VIOLATED_POLICY,
-                        "Duplicate client ID"));
+                        "ID duplicada"));
                 return;
             } catch (IOException e) {
-                System.out.println("Error rejecting duplicate connection");
+                System.out.println("Error: rechazo de conexion duplicada");
             }
         }
 
         sessions.put(clientId, session);
-        System.out.println("Client connected: " + clientId);
+        System.out.println("Conexion: " + clientId);
 
-        // Notificar a TODOS los clientes sobre la nueva conexión
-        notifyClientConnection(clientId);
+        notificarConexionCliente(clientId);
 
 
     }
 
     @OnMessage
     public void onMessage(String message, Session session, @PathParam("clientId") String clientId) {
-        System.out.println("Received from client " + clientId + ": " + message);
+        System.out.println("Recibido de " + clientId + ": " + message);
 
         try {
-            // Parsear el mensaje JSON
-            JsonMessage msg = parseMessage(message);
+            // parsear el mensaje JSON
+            MensajeJson msg = parsearMensaje(message);
 
-            // Validar el destino
+            // validar el destino
             if (msg.getDestino() != null && !msg.getDestino().isEmpty()) {
                 if (!sessions.containsKey(msg.getDestino())) {
-                    // Destino no encontrado, enviar error al remitente
-                    String errorMsg = createErrorJson("DESTINATION_NOT_FOUND",
-                            "Destination client not found: " + msg.getDestino());
+                    String errorMsg = crearJsonError("DESTINATION_NOT_FOUND",
+                            "Cliente destino no encontrado: " + msg.getDestino());
                     session.getBasicRemote().sendText(errorMsg);
                     return;
                 }
 
-                // Enviar mensaje al destino específico
-                sendToDestination(msg, clientId);
+                // enviar mensaje al destino específico
+                sendToDestino(msg, clientId);
             } else {
-                // Broadcast a todos los clientes excepto el remitente
+                // broadcast a todos los clientes
                 broadcast(message, clientId);
             }
 
         } catch (Exception e) {
-            // Error parsing JSON, enviar mensaje de error
             try {
-                String errorMsg = createErrorJson("INVALID_MESSAGE",
-                        "Invalid message format");
+                String errorMsg = crearJsonError("INVALID_MESSAGE",
+                        "Formato de mensaje erroneo ");
                 session.getBasicRemote().sendText(errorMsg);
             } catch (IOException ioException) {
-                System.out.println("Error sending error message");
+                System.out.println("Error al enviar");
             }
         }
     }
 
-    private void sendToDestination(JsonMessage msg, String senderId) {
+    private void sendToDestino(MensajeJson msg, String senderId) {
         Session destinationSession = sessions.get(msg.getDestino());
         if (destinationSession != null && destinationSession.isOpen()) {
             try {
-                // Crear mensaje formateado con información del remitente
-                String formattedMessage = createMessageJson(
+                String formattedMessage = crearMensajeJson(
                         senderId,
                         msg.getMessage(),
                         msg.getType(),
@@ -86,28 +82,27 @@ public class WebSocketServer {
                 );
 
                 destinationSession.getBasicRemote().sendText(formattedMessage);
-                System.out.println("Message sent from " + senderId + " to " + msg.getDestino());
+                System.out.println("Enviado de " + senderId + " a " + msg.getDestino());
 
             } catch (IOException e) {
-                System.out.println("Error sending message to client " + msg.getDestino());
-                // Notificar al remitente sobre el error de envío
-                notifySenderError(senderId, msg.getDestino());
+                System.out.println("Error al enviar mensaje a cliente " + msg.getDestino());
+                notificarSenderError(senderId, msg.getDestino());
             }
         } else {
-            // El destino se desconectó después de la validación inicial
-            notifySenderError(senderId, msg.getDestino());
+            // si el destino se desconecta despues de la validacion inicial
+            notificarSenderError(senderId, msg.getDestino());
         }
     }
 
-    private void notifySenderError(String senderId, String destinationId) {
+    private void notificarSenderError(String senderId, String destinationId) {
         Session senderSession = sessions.get(senderId);
         if (senderSession != null && senderSession.isOpen()) {
             try {
-                String errorMsg = createErrorJson("DESTINATION_DISCONNECTED",
-                        "Destination client disconnected: " + destinationId);
+                String errorMsg = crearJsonError("DESTINATION_DISCONNECTED",
+                        "Cliente destino desconectado: " + destinationId);
                 senderSession.getBasicRemote().sendText(errorMsg);
             } catch (IOException e) {
-                System.out.println("Error notifying sender about disconnected destination");
+                System.out.println("Error al notificar error a remitente");
             }
         }
     }
@@ -118,7 +113,7 @@ public class WebSocketServer {
                 try {
                     sess.getBasicRemote().sendText(message);
                 } catch (IOException e) {
-                    System.out.println("Error sending message to client " + id);
+                    System.out.println("Error al enviar mensaje a cliente " + id);
                 }
             }
         });
@@ -126,55 +121,53 @@ public class WebSocketServer {
 
     @OnError
     public void onError(Throwable error, Session session, @PathParam("clientId") String clientId) {
-        System.out.println("Error occurred for client " + clientId);
+        System.out.println("Error para cliente " + clientId);
         error.printStackTrace();
     }
 
     @OnClose
     public void onClose(Session session, @PathParam("clientId") String clientId) {
         sessions.remove(clientId);
-        System.out.println("Client disconnected: " + clientId);
+        System.out.println("Desconexion de : " + clientId);
 
-        // Notificar a otros clientes sobre la desconexión
-        notifyClientDisconnection(clientId);
+        notificarDesconexionCliente(clientId);
     }
 
-    private void notifyClientConnection(String clientId) {
-        JsonMessage connectMessage = createSystemMessage(
+    private void notificarConexionCliente(String clientId) {
+        MensajeJson connectMessage = crearMensajeSistema(
                 clientId,
-                "Client connected",
+                "Cliente conectado",
                 "client_connect"
         );
 
-        broadcast(createSystemMessageJson(connectMessage), "SYSTEM");
+        broadcast(crearJsonMensajeSistema(connectMessage), "SYSTEM");
     }
 
-    private void notifyClientDisconnection(String clientId) {
-        JsonMessage disconnectMessage = createSystemMessage(
+    private void notificarDesconexionCliente(String clientId) {
+        MensajeJson disconnectMessage = crearMensajeSistema(
                 clientId,
-                "Client disconnected\n----------------------------------------------------------\n",
+                "Cliente desconectado\n----------------------------------------------------------\n",
                 "client_disconnect"
         );
 
-        broadcast(createSystemMessageJson(disconnectMessage), "SYSTEM");
+        broadcast(crearJsonMensajeSistema(disconnectMessage), "SYSTEM");
     }
 
-    // Métodos auxiliares para crear JSON (sin cambios)
-    private String createErrorJson(String errorCode, String errorMessage) {
+    private String crearJsonError(String errorCode, String errorMessage) {
         return String.format(
                 "{\"type\":\"error\",\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":%d}",
                 errorCode, errorMessage, System.currentTimeMillis()
         );
     }
 
-    private String createSuccessJson(String status, String message) {
+    private String crearJsonSuccess(String status, String message) {
         return String.format(
                 "{\"type\":\"success\",\"status\":\"%s\",\"message\":\"%s\",\"timestamp\":%d}",
                 status, message, System.currentTimeMillis()
         );
     }
 
-    private String createMessageJson(String sender, String message, String type,
+    private String crearMensajeJson(String sender, String message, String type,
                                      String destination, long timestamp) {
         return String.format(
                 "{\"type\":\"%s\",\"sender\":\"%s\",\"destino\":\"%s\",\"message\":\"%s\",\"timestamp\":%d}",
@@ -186,7 +179,7 @@ public class WebSocketServer {
         );
     }
 
-    private String createSystemMessageJson(JsonMessage msg) {
+    private String crearJsonMensajeSistema(MensajeJson msg) {
         return String.format(
                 "{\"type\":\"%s\",\"sender\":\"%s\",\"message\":\"%s\",\"timestamp\":%d}",
                 msg.getType(),
@@ -196,8 +189,8 @@ public class WebSocketServer {
         );
     }
 
-    private JsonMessage createSystemMessage(String sender, String message, String type) {
-        JsonMessage systemMsg = new JsonMessage();
+    private MensajeJson crearMensajeSistema(String sender, String message, String type) {
+        MensajeJson systemMsg = new MensajeJson();
         systemMsg.setType(type != null ? type : "system");
         systemMsg.setSender(sender != null ? sender : "SYSTEM");
         systemMsg.setMessage(message != null ? message : "");
@@ -205,15 +198,13 @@ public class WebSocketServer {
         return systemMsg;
     }
 
-    // Clase interna para parsear mensajes JSON (sin cambios)
-    private static class JsonMessage {
+    private static class MensajeJson {
         private String type;
         private String message;
         private String sender;
         private String destino;
         private long timestamp;
 
-        // Getters y setters
         public String getType() { return type; }
         public void setType(String type) { this.type = type; }
 
@@ -230,26 +221,24 @@ public class WebSocketServer {
         public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 
-    private JsonMessage parseMessage(String jsonString) {
-        // Parseo simple - en producción usarías una librería JSON como Jackson o Gson
-        JsonMessage msg = new JsonMessage();
+    private MensajeJson parsearMensaje(String jsonString) {
+        MensajeJson msg = new MensajeJson();
 
-        // Extraer valores básicos del JSON
         if (jsonString.contains("\"type\"")) {
-            msg.type = extractValue(jsonString, "type");
+            msg.type = extraerValor(jsonString, "type");
         }
         if (jsonString.contains("\"message\"")) {
-            msg.message = extractValue(jsonString, "message");
+            msg.message = extraerValor(jsonString, "message");
         }
         if (jsonString.contains("\"sender\"")) {
-            msg.sender = extractValue(jsonString, "sender");
+            msg.sender = extraerValor(jsonString, "sender");
         }
         if (jsonString.contains("\"destino\"")) {
-            msg.destino = extractValue(jsonString, "destino");
+            msg.destino = extraerValor(jsonString, "destino");
         }
         if (jsonString.contains("\"timestamp\"")) {
             try {
-                msg.timestamp = Long.parseLong(extractValue(jsonString, "timestamp"));
+                msg.timestamp = Long.parseLong(extraerValor(jsonString, "timestamp"));
             } catch (NumberFormatException e) {
                 msg.timestamp = System.currentTimeMillis();
             }
@@ -258,7 +247,7 @@ public class WebSocketServer {
         return msg;
     }
 
-    private String extractValue(String json, String key) {
+    private String extraerValor(String json, String key) {
         try {
             String searchKey = "\"" + key + "\":\"";
             int start = json.indexOf(searchKey) + searchKey.length();
@@ -269,8 +258,8 @@ public class WebSocketServer {
         }
     }
 
-    // Método para obtener clientes conectados (útil para debugging)
+    // para debugging
     public static void printConnectedClients() {
-        System.out.println("Connected clients: " + sessions.keySet());
+        System.out.println("Clientes conectados: " + sessions.keySet());
     }
 }
