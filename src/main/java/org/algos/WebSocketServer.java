@@ -112,6 +112,7 @@ public class WebSocketServer {
             if (sess.isOpen() && !id.equals(senderId)) {
                 try {
                     sess.getBasicRemote().sendText(message);
+                    System.out.println("SenderId: "+senderId+" / mensaje: "+message);
                 } catch (IOException e) {
                     System.out.println("Error al enviar mensaje a cliente " + id);
                 }
