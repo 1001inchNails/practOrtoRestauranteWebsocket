@@ -260,7 +260,7 @@ public class WebSocketServer {
     }
 
     // para debugging
-    public static void printConnectedClients() {
-        System.out.println("Clientes conectados: " + sessions.keySet());
-    }
+//    public static void printConnectedClients() {
+//        System.out.println("Clientes conectados: " + sessions.keySet());
+//    }
 }
